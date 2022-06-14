@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
+"""Generate dual mesh consistinf of polygonal cell."""
 import meshio
 import numpy as np
 
 
 def array_intersection(a, b):
-    """Returns a boolean array of where b array's elements appear in the a array"""
+    """Return a boolean array of where b array's elements appear in the a array."""
     # Source: https://stackoverflow.com/questions/8317022/get-intersecting-rows-across-two-2d-numpy-arrays
     if not isinstance(a, np.ndarray):
         a = np.array(a)
@@ -16,68 +17,82 @@ def array_intersection(a, b):
 
 
 def reorder_points(points):
-    """Returns the order of given points, such that they are anticlockwise.
+    """Return the order of given points, such that they are anticlockwise.
 
-    Parameters:
-        points:     numpy.ndarray
-            Vertices of the polygon
+    Parameter:
+        points:     np.array
+            Vertices of the polygon.
     """
     assert isinstance(points, np.ndarray)
     assert points.shape[1] > 1
     # Calculate the center of the points
     c = points.mean(axis=0)
     # Calculate the angles between the horizontal and the line joining center to each point
-    angles = np.arctan2(points[:,1] - c[1], points[:,0] - c[0])
+    angles = np.arctan2(points[:, 1] - c[1], points[:, 0] - c[0])
 
-    return np.argsort(angles).tolist()
+    return np.argsort(angles)
 
 
 def get_area(points):
-    """Returns the area of a polygon given the vertices.
+    """Return the area of a polygon given the vertices.
 
-    Parameters:
-        points:     numpy.ndarray
-            Vertices of the polygon
+    Warning: the points need to be ordered clockwise or anticlockwise.
 
-    Warning: the points need to be ordered clockwise or anticlockwise."""
-
-    # shift all the points by one
+    Parameter:
+        points:     np.array
+            Vertices of the polygon.
+    """
+    # Shift all the points by one
     shifted = np.roll(points, 1, axis=0)
 
-    # Use the shoelace formula
-    area = 0.5 * np.sum((shifted[:, 0] + points[:, 0])*(shifted[:, 1] - points[:, 1]))
+    # Use the shoelace formula (trapezoid formula)
+    area = 0.5 * np.sum((shifted[:, 0] + points[:, 0]) * (shifted[:, 1] - points[:, 1]))
 
     return np.abs(area)
 
 
 def get_dual_points(mesh, index):
-    """Returns the points of the dual mesh nearest to the point in the mesh given by the index.
+    """Return the points of the dual mesh nearest to the point in the mesh given by the index, generating the polygon.
 
-    Parameters:
+    Calculates the centroid point, the edge center points for the index point and its two neigbor points.
+    If the index point does not appear in six cells, itself is added zo zhe array.
+
+    Parameter:
         mesh:       meshio.Mesh object
             Input mesh.
-
         index:      int
             Index of the point in the input mesh for which to calculate the nearest points of the dual mesh.
-
     """
     assert isinstance(mesh, meshio.Mesh)
-    ## For each type of cell do the following
-    # Find the cells where the given index appears
-    _idxs = [np.where(x[1] == index)[0] for x in mesh.cells]
-    # Find the centers of all the cells
-    _vs = [mesh.points[x[1][_idxs[i]]].mean(axis=1) for i,x in enumerate(mesh.cells)]
-    return np.concatenate(_vs, axis=0)
+    # For each type of cell do the following
+    # Find the points of the cell, where the given node (index) appears
+    _idxs = np.array([x for x in mesh.cells[0].data if np.isin(index, x)])
+
+    # Find the coordinates that generate the polygon (centroid node, edge center node)
+    # Get coordinates of polygon using listcomprehension
+    _vs = np.array(
+        [
+            (
+                # centroid node
+                mesh.points[entry].mean(axis=0),
+                # edge center node 1
+                mesh.points[np.array([index, entry[entry != index][0]])].mean(axis=0),
+                # edge center node 2
+                mesh.points[np.array([index, entry[entry != index][1]])].mean(axis=0),
+            )
+            for entry in _idxs
+        ]
+    )
+    _vs = _vs.reshape(_vs.shape[0] * _vs.shape[1], _vs.shape[2])
+    return np.unique(_vs, axis=0)
 
 
 def get_dual(mesh, order=False):
-    """Returns the dual mesh held in a dictionary with dual["points"] giving the coordinates and
-    dual["cells"] giving the indicies of all the cells of the dual mesh.
+    """Return the dual mesh held in a dictionary with dual["points"] giving the coordinates and dual["cells"] giving the indicies of all the cells of the dual mesh.
 
-    Parameters:
+    Parameter:
         mesh:       meshio.Mesh object
             Input mesh.
-
         order:      boolean
             Whether to reorder the indices of each cell, such that they are in anticlockwise order.
     """
