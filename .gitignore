@@ -13,3 +13,10 @@ main.ipynb
 # Another input file
 example.vtu
 example_2.msh
+
+# *.png files for visualization
+*.png
+
+# mesh files
+*.vtk
+*.msh
