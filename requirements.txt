@@ -1,2 +1,4 @@
 meshio>=4.0
 numpy>=1.16
+matplotlib==3.5.2
+meshzoo==0.10.2
